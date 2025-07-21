@@ -37,6 +37,8 @@ from ultralytics.nn.modules import (
     C2fAttn,
     C2fCIB,
     C2fPSA,
+    C2f_Faster,
+    C3_Faster,
     C3Ghost,
     C3k2,
     C3x,
@@ -1661,8 +1663,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         if m in {
             Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, Focus,
             BottleneckCSP, C1, C2, C2f, ELAN1, AConv, SPPELAN, C2fAttn, C3, C3TR,
-            C3Ghost, nn.Conv2d, nn.ConvTranspose2d, DWConvTranspose2d, C3x, RepC3, PSA, SCDown, C2fCIB
-
+            C3Ghost, nn.Conv2d, nn.ConvTranspose2d, DWConvTranspose2d, C3x, RepC3, PSA, SCDown, C2fCIB,
+            C2f_Faster, C3_Faster
         }:
             if args[0] == 'head_channel':
                 args[0] = d[args[0]]
@@ -1676,6 +1678,12 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 )  # num heads
 
             args = [c1, c2, *args[1:]]
+            if m is C2f_Faster:
+                args.insert(2, n)
+                n = 1
+            elif m is C3_Faster:
+                args.insert(2, n)
+                n = 1
 
         elif m in {AIFI}:
             args = [ch[f], *args]

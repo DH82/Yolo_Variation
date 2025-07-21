@@ -41,6 +41,8 @@ from .block import (
     C2fAttn,
     C2fCIB,
     C2fPSA,
+    C2f_Faster,
+    C3_Faster,
     C3Ghost,
     C3k2,
     C3x,
