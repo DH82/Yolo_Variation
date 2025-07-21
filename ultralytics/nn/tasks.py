@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from ultralytics.nn.backbone.efficientVit import *
 from ultralytics.nn.backbone.fasternet import *
+from ultralytics.nn.backbone.convnextv2 import *
 
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
@@ -1713,12 +1714,13 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 m = timm.create_model(m, pretrained=args[0], features_only=True)
             c2 = m.feature_info.channels()
         elif m in {EfficientViT_M0, EfficientViT_M1, EfficientViT_M2, EfficientViT_M3, EfficientViT_M4, EfficientViT_M5,
-                  fasternet_t0, fasternet_t1, fasternet_t2, fasternet_s, fasternet_m, fasternet_l}:
+                  fasternet_t0, fasternet_t1, fasternet_t2, fasternet_s, fasternet_m, fasternet_l,
+                  convnextv2_atto, convnextv2_femto, convnextv2_pico, convnextv2_nano,
+                  convnextv2_tiny, convnextv2_base, convnextv2_large, convnextv2_huge}:
             m = m(*args)
             c2 = m.channel
         else:
             c2 = ch[f]
-
 
         if isinstance(c2, list):
             is_backbone = True
