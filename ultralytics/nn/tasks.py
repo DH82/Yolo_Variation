@@ -9,6 +9,8 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
+import ast
+import timm
 
 from ultralytics.nn.backbone.efficientVit import *
 from ultralytics.nn.backbone.fasternet import *
@@ -1608,20 +1610,7 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
     return model, ckpt
 
 
-def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
-    """
-    Parse a YOLO model.yaml dictionary into a PyTorch model.
-
-    Args:
-        d (dict): Model dictionary.
-        ch (int): Input channels.
-        verbose (bool): Whether to print model details.
-
-    Returns:
-        (tuple): Tuple containing the PyTorch model and sorted list of output layers.
-    """
-    import ast
-
+def parse_model(d, ch, verbose=True):
     # Args
     max_channels = float("inf")
     nc, act, scales = (d.get(x) for x in ("nc", "activation", "scales"))
@@ -1637,26 +1626,30 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             depth, width, max_channels, threshold = scales[scale]
 
     if act:
-        Conv.default_act = eval(act)  # redefine default activation, i.e. Conv.default_act = nn.SiLU()
+        Conv.default_act = eval(act)
         if verbose:
-            LOGGER.info(f"{colorstr('activation:')} {act}")  # print
+            LOGGER.info(f"{colorstr('activation:')} {act}")
 
     if verbose:
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<60}{'arguments':<50}")
+
     ch = [ch]
-    layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
+    layers, save, c2 = [], [], ch[-1]
     is_backbone = False
-    for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
+
+    for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):
         try:
             if m == 'node_mode':
                 m = d[m]
-                if len(args) > 0:
-                    if args[0] == 'head_channel':
-                        args[0] = int(d[args[0]])
+                if len(args) > 0 and args[0] == 'head_channel':
+                    args[0] = int(d[args[0]])
+
             t = m
-            m = getattr(torch.nn, m[3:]) if 'nn.' in m else globals()[m]  # get module
-        except:
-            pass
+            m = getattr(nn, m[3:]) if 'nn.' in m else globals()[m]
+        except Exception as e:
+            raise KeyError(f"❌ Module '{m}' not found. Check if it is imported and registered in globals(). Error: {e}")
+
+        # Literal eval args
         for j, a in enumerate(args):
             if isinstance(a, str):
                 with contextlib.suppress(ValueError):
@@ -1664,7 +1657,10 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                         args[j] = locals()[a] if a in locals() else ast.literal_eval(a)
                     except:
                         args[j] = a
-        n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
+
+        n_ = n = max(round(n * depth), 1) if n > 1 else n
+
+        # Layer-specific logic
         if m in {
             Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, Focus,
             BottleneckCSP, C1, C2, C2f, ELAN1, AConv, SPPELAN, C2fAttn, C3, C3TR,
@@ -1674,97 +1670,107 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             if args[0] == 'head_channel':
                 args[0] = d[args[0]]
             c1, c2 = ch[f], args[0]
-            if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
+            if c2 != nc:
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
             if m is C2fAttn:
-                args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)  # embed channels
-                args[2] = int(
-                    max(round(min(args[2], max_channels // 2 // 32)) * width, 1) if args[2] > 1 else args[2]
-                )  # num heads
-
+                args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)
+                args[2] = int(max(round(min(args[2], max_channels // 2 // 32)) * width, 1) if args[2] > 1 else args[2])
             args = [c1, c2, *args[1:]]
-            if m is C2f_Faster:
-                args.insert(2, n)
-                n = 1
-            elif m is C3_Faster:
+            if m in {C2f_Faster, C3_Faster}:
                 args.insert(2, n)
                 n = 1
 
         elif m in {AIFI}:
             args = [ch[f], *args]
             c2 = args[0]
+
         elif m in (HGStem, HGBlock):
             c1, cm, c2 = ch[f], args[0], args[1]
-            if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
-                c2 = make_divisible(min(c2, max_channels) * width, 8)
-                cm = make_divisible(min(cm, max_channels) * width, 8)
+            c2 = make_divisible(min(c2, max_channels) * width, 8)
+            cm = make_divisible(min(cm, max_channels) * width, 8)
             args = [c1, cm, c2, *args[2:]]
-            if m in (HGBlock):
-                args.insert(4, n)  # number of repeats
+            if m is HGBlock:
+                args.insert(4, n)
                 n = 1
+
         elif m is ResNetLayer:
             c2 = args[1] if args[3] else args[1] * 4
+
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
+
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in frozenset({Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}):
+
+        elif m in {Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}:
             args.append([ch[x] for x in f])
-        elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
+
+        elif m is RTDETRDecoder:
             args.insert(1, [ch[x] for x in f])
+
         elif m is CBLinear:
             c2 = make_divisible(min(args[0][-1], max_channels) * width, 8)
             c1 = ch[f]
             args = [c1, [make_divisible(min(c2_, max_channels) * width, 8) for c2_ in args[0]], *args[1:]]
+
         elif m is CBFuse:
             c2 = ch[f[-1]]
+
         elif isinstance(m, str):
-            t = m
+            # timm model
             if len(args) == 2:
-                m = timm.create_model(m, pretrained=args[0], pretrained_cfg_overlay={'file': args[1]},
-                                      features_only=True)
+                m = timm.create_model(m, pretrained=args[0], pretrained_cfg_overlay={'file': args[1]}, features_only=True)
             elif len(args) == 1:
                 m = timm.create_model(m, pretrained=args[0], features_only=True)
             c2 = m.feature_info.channels()
-        elif m in {EfficientViT_M0, EfficientViT_M1, EfficientViT_M2, EfficientViT_M3, EfficientViT_M4, EfficientViT_M5,
-                  fasternet_t0, fasternet_t1, fasternet_t2, fasternet_s, fasternet_m, fasternet_l,
-                  convnextv2_atto, convnextv2_femto, convnextv2_pico, convnextv2_nano,
-                  convnextv2_tiny, convnextv2_base, convnextv2_large, convnextv2_huge,
-                  efficientformerv2_s0, efficientformerv2_s1, efficientformerv2_s2, efficientformerv2_l,
-                  vanillanet_5, vanillanet_6, vanillanet_7, vanillanet_8, vanillanet_9, vanillanet_10,
-                  vanillanet_11, vanillanet_12, vanillanet_13, vanillanet_13_x1_5, vanillanet_13_x1_5_ada_pool,
-                  lsknet_t, lsknet_s,
-                  SwinTransformer_Tiny,
-                  repvit_m0_9, repvit_m1_0, repvit_m1_1, repvit_m1_5, repvit_m2_3
-                  }:
+
+        elif m in {
+            EfficientViT_M0, EfficientViT_M1, EfficientViT_M2, EfficientViT_M3, EfficientViT_M4, EfficientViT_M5,
+            fasternet_t0, fasternet_t1, fasternet_t2, fasternet_s, fasternet_m, fasternet_l,
+            convnextv2_atto, convnextv2_femto, convnextv2_pico, convnextv2_nano,
+            convnextv2_tiny, convnextv2_base, convnextv2_large, convnextv2_huge,
+            efficientformerv2_s0, efficientformerv2_s1, efficientformerv2_s2, efficientformerv2_l,
+            vanillanet_5, vanillanet_6, vanillanet_7, vanillanet_8, vanillanet_9, vanillanet_10,
+            vanillanet_11, vanillanet_12, vanillanet_13, vanillanet_13_x1_5, vanillanet_13_x1_5_ada_pool,
+            lsknet_t, lsknet_s,
+            SwinTransformer_Tiny,
+            repvit_m0_9, repvit_m1_0, repvit_m1_1, repvit_m1_5, repvit_m2_3
+        }:
             m = m(*args)
             c2 = m.channel
+
         else:
             c2 = ch[f]
 
+        # Layer instantiation
         if isinstance(c2, list):
             is_backbone = True
             m_ = m
             m_.backbone = True
         else:
-            m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
-            t = str(m)[8:-2].replace('__main__.', '')  # module type
-        m.np = sum(x.numel() for x in m_.parameters())  # number params
-        m_.i, m_.f, m_.type = i + 4 if is_backbone else i, f, t  # attach index, 'from' index, type
+            m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)
+            t = str(m)[8:-2].replace('__main__.', '')
+
+        m.np = sum(x.numel() for x in m_.parameters())
+        m_.i, m_.f, m_.type = i + 4 if is_backbone else i, f, t
+
         if verbose:
-            LOGGER.info(f"{i:>3}{str(f):>20}{n_:>3}{m.np:10.0f}  {t:<60}{str(args):<50}")  # print
-        save.extend(x % (i + 4 if is_backbone else i) for x in ([f] if isinstance(f, int) else f) if
-                    x != -1)  # append to savelist
+            LOGGER.info(f"{i:>3}{str(f):>20}{n_:>3}{m.np:10.0f}  {t:<60}{str(args):<50}")
+
+        save.extend(x % (i + 4 if is_backbone else i) for x in ([f] if isinstance(f, int) else f) if x != -1)
         layers.append(m_)
+
         if i == 0:
             ch = []
         if isinstance(c2, list):
             ch.extend(c2)
-            for _ in range(5 - len(ch)):
+            while len(ch) < 5:
                 ch.insert(0, 0)
         else:
             ch.append(c2)
+
     return nn.Sequential(*layers), sorted(save)
+
 
 
 def yaml_model_load(path):
