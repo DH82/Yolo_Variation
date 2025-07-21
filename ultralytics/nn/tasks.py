@@ -1724,7 +1724,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         elif m in {EfficientViT_M0, EfficientViT_M1, EfficientViT_M2, EfficientViT_M3, EfficientViT_M4, EfficientViT_M5,
                   fasternet_t0, fasternet_t1, fasternet_t2, fasternet_s, fasternet_m, fasternet_l,
                   convnextv2_atto, convnextv2_femto, convnextv2_pico, convnextv2_nano,
-                  convnextv2_tiny, convnextv2_base, convnextv2_large, convnextv2_huge}:
+                  convnextv2_tiny, convnextv2_base, convnextv2_large, convnextv2_huge,
+                  efficientformerv2_s0, efficientformerv2_s1, efficientformerv2_s2, efficientformerv2_l}:
             m = m(*args)
             c2 = m.channel
         else:
