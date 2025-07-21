@@ -17,6 +17,7 @@ from ultralytics.nn.backbone.EifficientFormerV2 import *
 from ultralytics.nn.backbone.VanillaNet import *
 from ultralytics.nn.backbone.lsknet import *
 from ultralytics.nn.backbone.SwinTransformer import *
+from ultralytics.nn.backbone.repvit import *
 
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
@@ -1733,7 +1734,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                   vanillanet_5, vanillanet_6, vanillanet_7, vanillanet_8, vanillanet_9, vanillanet_10,
                   vanillanet_11, vanillanet_12, vanillanet_13, vanillanet_13_x1_5, vanillanet_13_x1_5_ada_pool,
                   lsknet_t, lsknet_s,
-                  SwinTransformer_Tiny
+                  SwinTransformer_Tiny,
+                  repvit_m0_9, repvit_m1_0, repvit_m1_1, repvit_m1_5, repvit_m2_3
                   }:
             m = m(*args)
             c2 = m.channel
