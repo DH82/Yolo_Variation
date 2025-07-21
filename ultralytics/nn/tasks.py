@@ -21,6 +21,7 @@ from ultralytics.nn.backbone.lsknet import *
 from ultralytics.nn.backbone.SwinTransformer import *
 from ultralytics.nn.backbone.repvit import *
 
+
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
     AIFI,
@@ -81,6 +82,7 @@ from ultralytics.nn.modules import (
     YOLOEDetect,
     YOLOESegment,
     v10Detect,
+    RandConv,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml

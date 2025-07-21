@@ -104,6 +104,10 @@ from .transformer import (
     TransformerLayer,
 )
 
+from .randconv import (
+    RandConv,
+)
+
 __all__ = (
     "Conv",
     "Conv2",
@@ -136,6 +140,8 @@ __all__ = (
     "C2fPSA",
     "C2PSA",
     "C2fAttn",
+    "C2f_Faster",
+    "C3_Faster",
     "C3x",
     "C3TR",
     "C3Ghost",
@@ -181,4 +187,5 @@ __all__ = (
     "TorchVision",
     "Index",
     "A2C2f",
+    "RandConv"
 )
