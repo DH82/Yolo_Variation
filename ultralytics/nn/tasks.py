@@ -15,6 +15,7 @@ from ultralytics.nn.backbone.fasternet import *
 from ultralytics.nn.backbone.convnextv2 import *
 from ultralytics.nn.backbone.EifficientFormerV2 import *
 from ultralytics.nn.backbone.VanillaNet import *
+from ultralytics.nn.backbone.lsknet import *
 
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules import (
@@ -1729,7 +1730,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                   convnextv2_tiny, convnextv2_base, convnextv2_large, convnextv2_huge,
                   efficientformerv2_s0, efficientformerv2_s1, efficientformerv2_s2, efficientformerv2_l,
                   vanillanet_5, vanillanet_6, vanillanet_7, vanillanet_8, vanillanet_9, vanillanet_10,
-                  vanillanet_11, vanillanet_12, vanillanet_13, vanillanet_13_x1_5, vanillanet_13_x1_5_ada_pool, vanillanet_13_x1_5_ada_pool_2
+                  vanillanet_11, vanillanet_12, vanillanet_13, vanillanet_13_x1_5, vanillanet_13_x1_5_ada_pool, vanillanet_13_x1_5_ada_pool_2,
+                  lsknet_t, lsknet_s
                   }:
             m = m(*args)
             c2 = m.channel
